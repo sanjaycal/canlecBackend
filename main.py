@@ -31,7 +31,6 @@ class GraphSchema(BaseModel):
 
 
 @app.post("/api/compute")
-@app.get("/api/compute")
 def compute_graph(graph: GraphSchema):
     node_instances = {}
     
