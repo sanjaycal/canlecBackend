@@ -530,7 +530,8 @@ class filterProvinceNode(node):
             else:
                 output_table2[ridingID] = copy.deepcopy(riding)
 
-        self.outputs = [[self.outputs[0][0], output_table1], [self.outputs[1][0], output_table2]]
+        inputType = self.inputs[0][1].outputs[self.inputs[0][2]][0]
+        self.outputs = [[inputType, output_table1], [inputType, output_table2]]
 
 ## MATH NODES
 
