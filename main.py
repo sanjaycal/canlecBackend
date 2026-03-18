@@ -1,125 +1,74 @@
-import canlecData as cld
-import random
-import pygal
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
+import uvicorn
+from nodes.nodes import NODE_TYPES, IMAGE
+app = FastAPI()
 
-VOTECOUNTRIDINGTABLE = "VoteCountRidingTable"
-RIDINGWINNERTABLE = "RidingWinnerTable"
-COLLATEDSEATSTABLE = "CollatedSeatsTable"
-IMAGE = "Image"
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-class node:
-    id = "0"
-    inputs = []
+class NodeSchema(BaseModel):
+    id: str
+    type: str
+    attrs: Optional[Dict[str, Any]] = None
+
+class EdgeSchema(BaseModel):
+    fromNode: str
+    fromSocket: int
+    toNode: str
+    toSocket: int
+
+class GraphSchema(BaseModel):
+    nodes: List[NodeSchema]
+    edges: List[EdgeSchema]
+
+
+@app.post("/api/compute")
+def compute_graph(graph: GraphSchema):
+    node_instances = {}
     
-    outputs = []
 
-    def compute(self):
-        pass
-
-class dataSourceNode(node):
-    def __init__(self):
-        self.id = str(random.randint(1,1000_000_000))
-
-        self.inputs = []
+    # 1. Instantiate all nodes
+    for n in graph.nodes:
+        if n.type not in NODE_TYPES:
+            raise HTTPException(status_code=400, detail=f"Unknown node type: {n.type}")
+        node_instances[n.id] = NODE_TYPES[n.type](n.id, n.attrs)
         
-        self.outputs = [[VOTECOUNTRIDINGTABLE, cld.ridingTable]]
-
-    def compute(self):
-        pass
-
-class findWinnerNode(node):
-    def __init__(self):
-        self.id = str(random.randint(1,1000_000_000))
-
-        self.inputs = [[VOTECOUNTRIDINGTABLE, None, None]]
-        
-        self.outputs = [[RIDINGWINNERTABLE, None]]
-        
-    def connectInput(self, inputId, otherNode, outputId):
-        self.inputs[inputId] = [self.inputs[inputId][0], otherNode, outputId]
-        
-    def compute(self):
-        for ip in self.inputs:
-            ip[1].compute()
-
-        startingData = self.inputs[0][1].outputs[self.inputs[0][2]][1]
-        outputData = {}
-
-        for ridingID in startingData.keys():
-            riding = startingData[ridingID]
-            outputData[riding["number"]] = {
-                "name": riding["name"],
-                "province": riding["province"],
-                "number": riding["number"],
-                "winner": max(riding["partyResults"], key = riding["partyResults"].get)
-            }
-
-        self.outputs = [[self.outputs[0][0], outputData]]
+    # 2. Wire up edges
+    out_degrees = {n.id: 0 for n in graph.nodes}
+    
+    for edge in graph.edges:
+        if edge.toNode not in node_instances or edge.fromNode not in node_instances:
+            continue
             
-class collateWinnersNode(node):
-    def __init__(self):
-        self.id = str(random.randint(1,1000_000_000))
-
-        self.inputs = [[RIDINGWINNERTABLE, None, None]]
+        target_node = node_instances[edge.toNode]
+        source_node = node_instances[edge.fromNode]
         
-        self.outputs = [[COLLATEDSEATSTABLE, None]]
-
-    def connectInput(self, inputId, otherNode, outputId):
-        self.inputs[inputId] = [self.inputs[inputId][0], otherNode, outputId]
-        
-    def compute(self):
-        for ip in self.inputs:
-            ip[1].compute()
-
-        startingData = self.inputs[0][1].outputs[self.inputs[0][2]][1]
-
-        counts = {}
-        for ridingID in startingData.keys():
-            riding = startingData[ridingID]
-            if riding["winner"] not in counts.keys():
-                counts[riding["winner"]] = 0
-            counts[riding["winner"]] += 1
-        
-        self.outputs = [[self.outputs[0][0], counts]]
-
-class barChartSeatsNode(node):
-    def __init__(self):
-        self.id = str(random.randint(1,1000_000_000))
-
-        self.inputs = [[COLLATEDSEATSTABLE, None, None]]
-        
-        self.outputs = [[IMAGE, None]]
-
-    def connectInput(self, inputId, otherNode, outputId):
-        self.inputs[inputId] = [self.inputs[inputId][0], otherNode, outputId]
-        
-    def compute(self):
-        for ip in self.inputs:
-            ip[1].compute()
-
-        startingData = self.inputs[0][1].outputs[self.inputs[0][2]][1]
-
-        barChart = pygal.HorizontalBar()
-        for party in startingData.keys():
-            barChart.add(party, startingData[party])
-
-        barChart.render_to_file('bar_chart.svg')
-        
-        self.outputs = [[self.outputs[0][0], None]]
-
-
-def main():
-    node1 = dataSourceNode()
-    node2 = findWinnerNode()
-    node3 = collateWinnersNode()
-    node4 = barChartSeatsNode()
-    node2.connectInput(0, node1, 0)
-    node3.connectInput(0, node2, 0)
-    node4.connectInput(0, node3, 0)
-    node4.compute()
-
-    print(node3.outputs[0][1])
-
+        if hasattr(target_node, "connectInput"):
+            target_node.connectInput(edge.toSocket, source_node, edge.fromSocket)
+            out_degrees[edge.fromNode] += 1
+            
+    # 3. Find graph sinks (nodes with out_degree 0)
+    sinks = [n_id for n_id, out_deg in out_degrees.items() if out_deg == 0]
+    
+    results = {}
+    
+    # 4. Compute backwards from sinks
+    for n_id in sinks:
+        sink_node = node_instances[n_id]
+        sink_node.compute()
+        # Collect image outputs or any meaningful output
+        if sink_node.outputs and len(sink_node.outputs) > 0 and sink_node.outputs[0][0] == IMAGE:
+            results[n_id] = sink_node.outputs[0][1]
+            
+    return {"results": results}
 
 if __name__ == "__main__":
-    main()
+    uvicorn.run("main:app", host="127.0.0.1", port=8001, reload=True)
