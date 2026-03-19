@@ -3,13 +3,18 @@ import copy
 import pygal
 
 VOTECOUNTRIDINGTABLE = "VoteCountRidingTable"
-COLLATEDVOTETABLE = "CollatedVoteTable"
 RIDINGWINNERTABLE = "RidingWinnerTable"
+RIDINGPERCENTAGETABLE = "RidingPercentageTable"
+
 COLLATEDSEATSTABLE = "CollatedSeatsTable"
+COLLATEDVOTETABLE = "CollatedVoteTable"
+COLLATEDPERCENTAGETABLE = "CollatedPercentageTable"
+
 IMAGE = "Image"
 FLOAT = "Float"
 PROVINCE = "Province"
 PARTY = "Party"
+
 ANYTABLE = "AnyTable"
 ANYCOLLATEDTABLE = "AnyCollatedTable"
 ANYRIDINGTABLE = "AnyRidingTable"
@@ -99,7 +104,7 @@ class barChartNode(node):
             cld.GREEN: '#24B24A'
         }
 
-        if inputType == COLLATEDSEATSTABLE or inputType == COLLATEDVOTETABLE:
+        if inputType == COLLATEDSEATSTABLE or inputType == COLLATEDVOTETABLE or inputType == COLLATEDPERCENTAGETABLE:
             # Data format: {"Liberal": 150, "Conservative": 120, ...}
             series_colors = []
             for party in startingData.keys():
@@ -152,10 +157,11 @@ class tableViewNode(node):
         
         html = '<table style="width:100%; border-collapse: collapse; font-size: 0.8rem; background: white; color: black;">'
         
-        if inputType == VOTECOUNTRIDINGTABLE:
+        if inputType == VOTECOUNTRIDINGTABLE or inputType == RIDINGPERCENTAGETABLE:
             html += '<tr style="border-bottom: 2px solid #cbd5e0; background: #edf2f7;"><th style="text-align: left; padding: 6px;">Riding</th>'
             parties = []
             for r_id in startingData:
+                print(startingData[r_id])
                 parties = list(startingData[r_id]["partyResults"].keys())
                 break
                 
@@ -185,7 +191,7 @@ class tableViewNode(node):
                 html += f'<tr style="border-bottom: 1px solid #e2e8f0; background: {bg_color};"><td style="padding: 6px;">{riding["name"]}</td><td style="text-align: right; padding: 6px;">{riding["winner"]}</td></tr>'
                 count += 1
                 
-        elif inputType == COLLATEDSEATSTABLE or inputType == COLLATEDVOTETABLE:
+        elif inputType == COLLATEDSEATSTABLE or inputType == COLLATEDVOTETABLE or inputType == COLLATEDPERCENTAGETABLE:
             html += '<tr style="border-bottom: 2px solid #cbd5e0; background: #edf2f7;"><th style="text-align: left; padding: 6px;">Party</th><th style="text-align: right; padding: 6px;">Total</th></tr>'
             count = 0
             for party, total in startingData.items():
@@ -250,6 +256,39 @@ class findWinnerNode(node):
 
         self.outputs = [[self.outputs[0][0], outputData]]
             
+class convertToPercentagesRidingNode(node):
+    def __init__(self, id: str = None, attrs: dict = None):
+        super().__init__(id, attrs)
+        self.inputs = [[VOTECOUNTRIDINGTABLE, None, None]]
+        self.outputs = [[RIDINGPERCENTAGETABLE, None]]
+        
+    def compute(self):
+        for ip in self.inputs:
+            if ip[1] is not None:
+                ip[1].compute()
+
+        if self.inputs[0][1] is None or self.inputs[0][2] is None:
+            return
+            
+        startingData = self.inputs[0][1].outputs[self.inputs[0][2]][1]
+        outputData = {}
+
+        for ridingID in startingData.keys():
+            riding = startingData[ridingID]
+            totalVotes = sum(riding["partyResults"].values())
+
+            outputData[riding["number"]] = {
+                "name": riding["name"],
+                "province": riding["province"],
+                "number": riding["number"],
+                "partyResults": {}
+            }
+
+            for party in riding["partyResults"].keys():
+                outputData[riding["number"]]["partyResults"][party] = 100.0*riding["partyResults"][party]/totalVotes
+
+        self.outputs = [[self.outputs[0][0], outputData]]
+    
 class collateWinnersNode(node):
     def __init__(self, id: str = None, attrs: dict = None):
         super().__init__(id, attrs)
@@ -301,6 +340,30 @@ class collateVotesNode(node):
         
         self.outputs = [[self.outputs[0][0], counts]]
 
+class convertToPercentagesCollatedNode(node):
+    def __init__(self, id: str = None, attrs: dict = None):
+        super().__init__(id, attrs)
+        self.inputs = [[COLLATEDVOTETABLE, None, None]]
+        self.outputs = [[COLLATEDPERCENTAGETABLE, None]]
+        
+    def compute(self):
+        for ip in self.inputs:
+            if ip[1] is not None:
+                ip[1].compute()
+
+        if self.inputs[0][1] is None or self.inputs[0][2] is None:
+            return
+            
+        startingData = self.inputs[0][1].outputs[self.inputs[0][2]][1]
+        outputData = {}
+
+        print(startingData)
+
+        totalVotes = sum(startingData.values())
+        for party in startingData.keys():
+            outputData[party] = 100.0*startingData[party]/totalVotes
+
+        self.outputs = [[self.outputs[0][0], outputData]]
 
 class extractCollatedNode(node):
     def __init__(self, id: str = None, attrs: dict = None):
@@ -666,6 +729,8 @@ NODE_TYPES = {
     "addNode": addNode,
     "subtractNode": subtractNode,
     "collateVotesNode": collateVotesNode,
+    "convertToPercentagesRidingNode": convertToPercentagesRidingNode,
+    "convertToPercentagesCollatedNode": convertToPercentagesCollatedNode,
     "tableViewNode": tableViewNode,
     "partyNode": partyNode,
     "noteNode": noteNode,
