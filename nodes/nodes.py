@@ -2,22 +2,19 @@ import canlecData as cld
 import copy
 import pygal
 
-VOTECOUNTRIDINGTABLE = "VoteCountRidingTable"
-RIDINGWINNERTABLE = "RidingWinnerTable"
-RIDINGPERCENTAGETABLE = "RidingPercentageTable"
+TABLE_RIDING_PARTY_FLOAT = "TABLE|RIDING|PARTY|FLOAT"
+TABLE_RIDING_ONE_PARTY = "TABLE|RIDING|ONE|PARTY"
 
-COLLATEDSEATSTABLE = "CollatedSeatsTable"
-COLLATEDVOTETABLE = "CollatedVoteTable"
-COLLATEDPERCENTAGETABLE = "CollatedPercentageTable"
+TABLE_COLLATED_PARTY_FLOAT = "TABLE|COLLATED|PARTY|FLOAT"
 
-IMAGE = "Image"
-FLOAT = "Float"
-PROVINCE = "Province"
-PARTY = "Party"
+IMAGE = "IMAGE"
+FLOAT = "FLOAT"
+PROVINCE = "PROVINCE"
+PARTY = "PARTY"
 
-ANYTABLE = "AnyTable"
-ANYCOLLATEDTABLE = "AnyCollatedTable"
-ANYRIDINGTABLE = "AnyRidingTable"
+TABLE_ANY = "TABLE|ANY"
+TABLE_COLLATED_ANY = "TABLE|COLLATED"
+TABLE_RIDING_ANY = "TABLE|RIDING"
 
 class node:
     def __init__(self, id: str = None, attrs: dict = None):
@@ -46,7 +43,7 @@ class floatNode(node):
 class dataSourceNode(node):
     def __init__(self, id: str = None, attrs: dict = None):
         super().__init__(id, attrs)
-        self.outputs = [[VOTECOUNTRIDINGTABLE, cld.ridingTable]]
+        self.outputs = [[TABLE_RIDING_PARTY_FLOAT, cld.ridingTable]]
 
     def compute(self):
         pass
@@ -81,7 +78,7 @@ class noteNode(node):
 class barChartNode(node):
     def __init__(self, id: str = None, attrs: dict = None):
         super().__init__(id, attrs)
-        self.inputs = [[ANYTABLE, None, None]]
+        self.inputs = [[TABLE_COLLATED_ANY, None, None]]
         self.outputs = [[IMAGE, None]]
 
     def compute(self):
@@ -104,7 +101,7 @@ class barChartNode(node):
             cld.GREEN: '#24B24A'
         }
 
-        if inputType == COLLATEDSEATSTABLE or inputType == COLLATEDVOTETABLE or inputType == COLLATEDPERCENTAGETABLE:
+        if TABLE_COLLATED_ANY in inputType:
             # Data format: {"Liberal": 150, "Conservative": 120, ...}
             series_colors = []
             for party in startingData.keys():
@@ -114,23 +111,6 @@ class barChartNode(node):
             barChart.style = custom_style
             for party in startingData.keys():
                 barChart.add(party, startingData[party])
-                
-        elif inputType == RIDINGWINNERTABLE:
-            # Too many ridings to chart usefully as horizontal bar, maybe group by winner?
-            counts = {}
-            for r_id, r in startingData.items():
-                winner = r.get("winner")
-                counts[winner] = counts.get(winner, 0) + 1
-            
-            series_colors = []
-            for party in counts.keys():
-                series_colors.append(party_colors.get(party, '#808080'))
-
-            custom_style = pygal.style.Style(colors=tuple(series_colors))
-            barChart.style = custom_style
-            for party in counts.keys():
-                barChart.add(party, counts[party])
-                
         else:
             # Too complex to bar chart VOTECOUNTRIDINGTABLE directly
             barChart.add("Not Supported", 1)
@@ -141,7 +121,7 @@ class barChartNode(node):
 class tableViewNode(node):
     def __init__(self, id: str = None, attrs: dict = None):
         super().__init__(id, attrs)
-        self.inputs = [[ANYTABLE, None, None]]
+        self.inputs = [[TABLE_ANY, None, None]]
         self.outputs = [[IMAGE, None]]
 
     def compute(self):
@@ -157,7 +137,7 @@ class tableViewNode(node):
         
         html = '<table style="width:100%; border-collapse: collapse; font-size: 0.8rem; background: white; color: black;">'
         
-        if inputType == VOTECOUNTRIDINGTABLE or inputType == RIDINGPERCENTAGETABLE:
+        if inputType == TABLE_RIDING_PARTY_FLOAT:
             html += '<tr style="border-bottom: 2px solid #cbd5e0; background: #edf2f7;"><th style="text-align: left; padding: 6px;">Riding</th>'
             parties = []
             for r_id in startingData:
@@ -181,7 +161,7 @@ class tableViewNode(node):
                 html += '</tr>'
                 count += 1
                 
-        elif inputType == RIDINGWINNERTABLE:
+        elif inputType == TABLE_RIDING_ONE_PARTY:
             html += '<tr style="border-bottom: 2px solid #cbd5e0; background: #edf2f7;"><th style="text-align: left; padding: 6px;">Riding</th><th style="text-align: right; padding: 6px;">Winner</th></tr>'
             count = 0
             for r_id, riding in startingData.items():
@@ -191,7 +171,7 @@ class tableViewNode(node):
                 html += f'<tr style="border-bottom: 1px solid #e2e8f0; background: {bg_color};"><td style="padding: 6px;">{riding["name"]}</td><td style="text-align: right; padding: 6px;">{riding["winner"]}</td></tr>'
                 count += 1
                 
-        elif inputType == COLLATEDSEATSTABLE or inputType == COLLATEDVOTETABLE or inputType == COLLATEDPERCENTAGETABLE:
+        elif TABLE_COLLATED_ANY in inputType:
             html += '<tr style="border-bottom: 2px solid #cbd5e0; background: #edf2f7;"><th style="text-align: left; padding: 6px;">Party</th><th style="text-align: right; padding: 6px;">Total</th></tr>'
             count = 0
             for party, total in startingData.items():
@@ -231,8 +211,8 @@ class floatDisplayNode(node):
 class findWinnerNode(node):
     def __init__(self, id: str = None, attrs: dict = None):
         super().__init__(id, attrs)
-        self.inputs = [[VOTECOUNTRIDINGTABLE, None, None]]
-        self.outputs = [[RIDINGWINNERTABLE, None]]
+        self.inputs = [[TABLE_RIDING_PARTY_FLOAT, None, None]]
+        self.outputs = [[TABLE_RIDING_ONE_PARTY, None]]
         
     def compute(self):
         for ip in self.inputs:
@@ -259,8 +239,8 @@ class findWinnerNode(node):
 class convertToPercentagesRidingNode(node):
     def __init__(self, id: str = None, attrs: dict = None):
         super().__init__(id, attrs)
-        self.inputs = [[VOTECOUNTRIDINGTABLE, None, None]]
-        self.outputs = [[RIDINGPERCENTAGETABLE, None]]
+        self.inputs = [[TABLE_RIDING_PARTY_FLOAT, None, None]]
+        self.outputs = [[TABLE_RIDING_PARTY_FLOAT, None]]
         
     def compute(self):
         for ip in self.inputs:
@@ -292,8 +272,8 @@ class convertToPercentagesRidingNode(node):
 class collateWinnersNode(node):
     def __init__(self, id: str = None, attrs: dict = None):
         super().__init__(id, attrs)
-        self.inputs = [[RIDINGWINNERTABLE, None, None]]
-        self.outputs = [[COLLATEDSEATSTABLE, None]]
+        self.inputs = [[TABLE_RIDING_ONE_PARTY, None, None]]
+        self.outputs = [[TABLE_COLLATED_PARTY_FLOAT, None]]
 
     def compute(self):
         for ip in self.inputs:
@@ -317,8 +297,8 @@ class collateWinnersNode(node):
 class collateVotesNode(node):
     def __init__(self, id: str = None, attrs: dict = None):
         super().__init__(id, attrs)
-        self.inputs = [[VOTECOUNTRIDINGTABLE, None, None]]
-        self.outputs = [[COLLATEDVOTETABLE, None]]
+        self.inputs = [[TABLE_RIDING_PARTY_FLOAT, None, None]]
+        self.outputs = [[TABLE_COLLATED_PARTY_FLOAT, None]]
 
     def compute(self):
         for ip in self.inputs:
@@ -343,8 +323,8 @@ class collateVotesNode(node):
 class convertToPercentagesCollatedNode(node):
     def __init__(self, id: str = None, attrs: dict = None):
         super().__init__(id, attrs)
-        self.inputs = [[COLLATEDVOTETABLE, None, None]]
-        self.outputs = [[COLLATEDPERCENTAGETABLE, None]]
+        self.inputs = [[TABLE_COLLATED_PARTY_FLOAT, None, None]]
+        self.outputs = [[TABLE_COLLATED_PARTY_FLOAT, None]]
         
     def compute(self):
         for ip in self.inputs:
@@ -369,7 +349,7 @@ class extractCollatedNode(node):
     def __init__(self, id: str = None, attrs: dict = None):
         super().__init__(id, attrs)
         self.inputs = [
-            [ANYCOLLATEDTABLE, None, None],
+            [TABLE_COLLATED_ANY, None, None],
             [PARTY, None, None]
         ]
         self.outputs = [[FLOAT, None]]
@@ -402,14 +382,14 @@ class uniformSwingNode(node):
     def __init__(self, id: str = None, attrs: dict = None):
         super().__init__(id, attrs)
         self.inputs = [
-            [VOTECOUNTRIDINGTABLE, None, None],
+            [TABLE_RIDING_PARTY_FLOAT, None, None],
             [FLOAT, None, None], # Lib
             [FLOAT, None, None], # Con
             [FLOAT, None, None], # NDP
             [FLOAT, None, None], # BQ
             [FLOAT, None, None], # Green
         ]
-        self.outputs = [[VOTECOUNTRIDINGTABLE, None]]
+        self.outputs = [[TABLE_RIDING_PARTY_FLOAT, None]]
 
     def compute(self):
         for ip in self.inputs:
@@ -450,14 +430,14 @@ class proportionalSwingNode(node):
     def __init__(self, id: str = None, attrs: dict = None):
         super().__init__(id, attrs)
         self.inputs = [
-            [VOTECOUNTRIDINGTABLE, None, None],
+            [TABLE_RIDING_PARTY_FLOAT, None, None],
             [FLOAT, None, None], # Lib
             [FLOAT, None, None], # Con
             [FLOAT, None, None], # NDP
             [FLOAT, None, None], # BQ
             [FLOAT, None, None], # Green
         ]
-        self.outputs = [[VOTECOUNTRIDINGTABLE, None]]
+        self.outputs = [[TABLE_RIDING_PARTY_FLOAT, None]]
 
     def compute(self):
         for ip in self.inputs:
@@ -495,11 +475,11 @@ class mixVoteCountTableNode(node):
     def __init__(self, id: str = None, attrs: dict = None):
         super().__init__(id, attrs)
         self.inputs = [
-            [VOTECOUNTRIDINGTABLE, None, None], # Table A
-            [VOTECOUNTRIDINGTABLE, None, None], # Table B
+            [TABLE_RIDING_PARTY_FLOAT, None, None], # Table A
+            [TABLE_RIDING_PARTY_FLOAT, None, None], # Table B
             [FLOAT, None, None]                 # Factor
         ]
-        self.outputs = [[VOTECOUNTRIDINGTABLE, None]]
+        self.outputs = [[TABLE_RIDING_PARTY_FLOAT, None]]
 
     def compute(self):
         for ip in self.inputs:
@@ -539,10 +519,10 @@ class mergeTablesNode(node):
     def __init__(self, id: str = None, attrs: dict = None):
         super().__init__(id, attrs)
         self.inputs = [
-            [ANYRIDINGTABLE, None, None],
-            [ANYRIDINGTABLE, None, None]
+            [TABLE_RIDING_ANY, None, None],
+            [TABLE_RIDING_ANY, None, None]
         ]
-        self.outputs = [[ANYRIDINGTABLE, None]]
+        self.outputs = [[TABLE_RIDING_ANY, None]]
 
     def compute(self):
         for ip in self.inputs:
@@ -569,10 +549,10 @@ class filterProvinceNode(node):
     def __init__(self, id: str = None, attrs: dict = None):
         super().__init__(id, attrs)
         self.inputs = [
-            [ANYRIDINGTABLE, None, None],
+            [TABLE_RIDING_ANY, None, None],
             [PROVINCE, None, None]
         ]
-        self.outputs = [[ANYRIDINGTABLE, None], [ANYRIDINGTABLE, None]]
+        self.outputs = [[TABLE_RIDING_ANY, None], [TABLE_RIDING_ANY, None]]
 
     def compute(self):
         for ip in self.inputs:
@@ -596,6 +576,36 @@ class filterProvinceNode(node):
         inputType = self.inputs[0][1].outputs[self.inputs[0][2]][0]
         self.outputs = [[inputType, output_table1], [inputType, output_table2]]
 
+class filterPartyNode(node):
+    def __init__(self, id: str = None, attrs: dict = None):
+        super().__init__(id, attrs)
+        self.inputs = [
+            [TABLE_RIDING_ONE_PARTY, None, None],
+            [PARTY, None, None]
+        ]
+        self.outputs = [[TABLE_RIDING_ONE_PARTY, None], [TABLE_RIDING_ONE_PARTY, None]]
+
+    def compute(self):
+        for ip in self.inputs:
+            if ip[1] is not None:
+                ip[1].compute()
+
+        if self.inputs[0][1] is None or self.inputs[0][2] is None or self.inputs[1][1] is None or self.inputs[1][2] is None:
+            return
+            
+        base_table = self.inputs[0][1].outputs[self.inputs[0][2]][1]
+        party = self.inputs[1][1].outputs[self.inputs[1][2]][1]
+        
+        output_table1 = {}
+        output_table2 = {}
+        for ridingID, riding in base_table.items():
+            if riding["winner"] == party:
+                output_table1[ridingID] = copy.deepcopy(riding)
+            else:
+                output_table2[ridingID] = copy.deepcopy(riding)
+
+        inputType = self.inputs[0][1].outputs[self.inputs[0][2]][0]
+        self.outputs = [[inputType, output_table1], [inputType, output_table2]]
 ## MATH NODES
 
 class divideNode(node):
@@ -723,6 +733,7 @@ NODE_TYPES = {
     "mixVoteCountTableNode": mixVoteCountTableNode,
     "provinceNode": provinceNode,
     "filterProvinceNode": filterProvinceNode,
+    "filterPartyNode": filterPartyNode,
     "mergeTablesNode": mergeTablesNode,
     "divideNode": divideNode,
     "multiplyNode": multiplyNode,
