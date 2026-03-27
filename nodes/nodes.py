@@ -134,6 +134,7 @@ class tableViewNode(node):
 
         startingData = self.inputs[0][1].outputs[self.inputs[0][2]][1]
         inputType = self.inputs[0][1].outputs[self.inputs[0][2]][0]
+        max_rows = 999;
         
         html = '<table style="width:100%; border-collapse: collapse; font-size: 0.8rem; background: white; color: black;">'
         
@@ -151,7 +152,7 @@ class tableViewNode(node):
             
             count = 0
             for r_id, riding in startingData.items():
-                if count >= 5:
+                if count >= max_rows:
                     break
                 bg_color = '#ffffff' if count % 2 == 0 else '#f7fafc'
                 html += f'<tr style="border-bottom: 1px solid #e2e8f0; background: {bg_color};"><td style="padding: 6px;">{riding["name"]}</td>'
@@ -165,7 +166,7 @@ class tableViewNode(node):
             html += '<tr style="border-bottom: 2px solid #cbd5e0; background: #edf2f7;"><th style="text-align: left; padding: 6px;">Riding</th><th style="text-align: right; padding: 6px;">Winner</th></tr>'
             count = 0
             for r_id, riding in startingData.items():
-                if count >= 5:
+                if count >= max_rows:
                     break
                 bg_color = '#ffffff' if count % 2 == 0 else '#f7fafc'
                 html += f'<tr style="border-bottom: 1px solid #e2e8f0; background: {bg_color};"><td style="padding: 6px;">{riding["name"]}</td><td style="text-align: right; padding: 6px;">{riding["winner"]}</td></tr>'
@@ -175,7 +176,7 @@ class tableViewNode(node):
             html += '<tr style="border-bottom: 2px solid #cbd5e0; background: #edf2f7;"><th style="text-align: left; padding: 6px;">Party</th><th style="text-align: right; padding: 6px;">Total</th></tr>'
             count = 0
             for party, total in startingData.items():
-                if count >= 5:
+                if count >= max_rows:
                     break
                 bg_color = '#ffffff' if count % 2 == 0 else '#f7fafc'
                 html += f'<tr style="border-bottom: 1px solid #e2e8f0; background: {bg_color};"><td style="padding: 6px;">{party}</td><td style="text-align: right; padding: 6px; font-family: monospace;">{total}</td></tr>'
